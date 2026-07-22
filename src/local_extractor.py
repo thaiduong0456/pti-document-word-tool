@@ -131,7 +131,7 @@ def _extract_fee(page: OCRPage) -> dict[str, ExtractedField]:
         policies.extend(POLICY_RE.findall(line.text.replace(" ", "")))
     output["policy_numbers"] = _field("policy_numbers", "; ".join(dict.fromkeys(policies)), page, policy_lines)
 
-    vessel_lines = _span(page, r"^TAU$", r"GIAM D")
+    vessel_lines = _span(page, r"\bTAU\s*$", r"GIAM D")
     vessel = " ".join(_clean_value(line.text) for line in vessel_lines)
     output["vessel_name"] = _field("vessel_name", vessel, page, vessel_lines)
 
