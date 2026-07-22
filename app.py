@@ -79,7 +79,9 @@ def field_rows(result: ExtractionResult, only_word_fields: bool = True) -> list[
             "field_name": name,
             "Trường": config["label"],
             "Giá trị": item.value or config.get("default", ""),
-            "Tin cậy": item.confidence,
+            # OCR stores confidence on a 0–1 scale; Streamlit's progress
+            # percentage display below uses the human-readable 0–100 scale.
+            "Tin cậy": round(max(0.0, min(1.0, item.confidence)) * 100, 1),
             "Trạng thái": item.status,
             "Nguồn": evidence.source_file if evidence else "",
             "Trang": evidence.source_page if evidence else "",
@@ -183,7 +185,12 @@ if result:
         column_config={
             "field_name": None,
             "Giá trị": st.column_config.TextColumn(width="large"),
-            "Tin cậy": st.column_config.ProgressColumn(min_value=0, max_value=1, format="%.0f%%"),
+            "Tin cậy": st.column_config.ProgressColumn(
+                help="Độ tin cậy OCR thực tế: 100% là cao nhất. Các trường tự tính/giá trị cố định được đối chiếu riêng.",
+                min_value=0,
+                max_value=100,
+                format="%.0f%%",
+            ),
             "Xác nhận": st.column_config.CheckboxColumn(),
         },
         key="field_editor",
