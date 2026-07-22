@@ -1,0 +1,17 @@
+.venv/
+.tools/
+.uv-cache/
+.DS_Store
+__pycache__/
+.pytest_cache/
+.streamlit/secrets.toml
+.env
+.qa/
+output/
+examples/
+templates/*.docx
+Bộ */
+Bộ */
+TT TT PGĐ GCN 28.docx
+*.pyc
+~$*.docx

@@ -1,0 +1,6 @@
+confidence_threshold: 0.85
+max_file_mb: 25
+max_files: 30
+openai_model: gpt-5.6
+image_detail: original
+template_path: "templates/template.docx"

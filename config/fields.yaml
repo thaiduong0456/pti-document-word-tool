@@ -1,0 +1,34 @@
+fields:
+  document_date: {label: "Ngày tờ trình", required: true, type: date, source_hint: "Người dùng xác nhận"}
+  claim_number: {label: "Số HSBT", required: true, type: text, source_hint: "Người dùng nhập/xác nhận"}
+  insured_name: {label: "Người được bảo hiểm", required: true, type: text, source_hint: "GCNBH/HĐBH"}
+  insured_address: {label: "Địa chỉ người được bảo hiểm", required: true, type: text, source_hint: "GCNBH/HĐBH"}
+  policy_numbers: {label: "Số GCN bảo hiểm", required: true, type: list, source_hint: "Thông báo phí/chứng thư"}
+  contract_number: {label: "Số hợp đồng bảo hiểm", required: false, type: text, source_hint: "HĐBH"}
+  issuing_unit: {label: "Đơn vị cấp đơn", required: true, type: text, default: "PTI Hồ Chí Minh"}
+  coinsurance_unit: {label: "Đơn vị đồng bảo hiểm", required: false, type: text}
+  insurance_condition: {label: "Điều kiện bảo hiểm", required: false, type: text}
+  deductible: {label: "Mức khấu trừ thiếu hụt", required: true, type: percent, default: "0,5%/STBH"}
+  payment_due_date: {label: "Thời hạn thanh toán", required: false, type: date}
+  payment_date: {label: "Ngày thanh toán", required: false, type: date}
+  commodities: {label: "Đối tượng bảo hiểm", required: true, type: list, source_hint: "Thông báo phí/chứng thư"}
+  survey_company: {label: "Đơn vị giám định", required: true, type: text, default: "Công ty Cổ phần Giám định Nam Việt"}
+  survey_fee: {label: "Phí giám định trước VAT", required: true, type: money, source_hint: "Hóa đơn/thông báo phí"}
+  vat_amount: {label: "Thuế VAT", required: false, type: money, source_hint: "Hóa đơn"}
+  grand_total: {label: "Tổng thanh toán", required: false, type: money, source_hint: "Hóa đơn"}
+  invoice_number: {label: "Số hóa đơn", required: true, type: text, source_hint: "Hóa đơn VAT"}
+  invoice_date: {label: "Ngày hóa đơn", required: true, type: date, source_hint: "Hóa đơn VAT"}
+  survey_report_number: {label: "Số báo cáo giám định", required: true, type: text, source_hint: "Thông báo phí/chứng thư"}
+  vessel_name: {label: "Tên tàu", required: true, type: text, source_hint: "Thông báo phí/chứng thư"}
+  bill_of_lading_numbers: {label: "Số B/L", required: true, type: list, source_hint: "Thông báo phí/chứng thư"}
+  origin: {label: "Nơi đi", required: false, type: text, source_hint: "Chứng thư"}
+  discharge_port: {label: "Cảng dỡ", required: true, type: text, source_hint: "Chứng thư"}
+  arrival_date: {label: "Ngày dỡ/giám định", required: true, type: date, source_hint: "Thông báo phí/chứng thư"}
+  declared_quantity_mt: {label: "Khối lượng trên Thông báo phí (MT)", required: true, type: decimal, source_hint: "Lấy nguyên văn dòng KHỐI LƯỢNG trên Thông báo phí"}
+  bl_quantity_mt: {label: "Khối lượng theo B/L (MT)", required: true, type: decimal, source_hint: "Cộng các chứng thư"}
+  received_quantity_mt: {label: "Khối lượng thực nhận (MT)", required: true, type: decimal, source_hint: "Cộng các chứng thư"}
+  shortage_mt: {label: "Khối lượng thiếu (MT)", required: true, type: decimal, source_hint: "Tự tính và đối chiếu"}
+  shortage_percent: {label: "Tỷ lệ thiếu hụt (%)", required: true, type: decimal, source_hint: "Tự tính và đối chiếu"}
+  shore_tanks: {label: "Danh sách bồn", required: false, type: list, source_hint: "Chứng thư"}
+  submitter_name: {label: "Người trình", required: true, type: text, default: "Mai Hạnh Lê"}
+  director_name: {label: "Giám đốc", required: true, type: text, default: "Nguyễn Ngọc Tuyến"}
