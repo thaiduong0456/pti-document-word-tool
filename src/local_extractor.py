@@ -133,6 +133,7 @@ def _extract_fee(page: OCRPage) -> dict[str, ExtractedField]:
 
     vessel_lines = _span(page, r"\bTAU\s*$", r"GIAM D")
     vessel = " ".join(_clean_value(line.text) for line in vessel_lines)
+    vessel = re.sub(r"^M\.?\s*T\.?\s*", "MT. ", vessel, flags=re.I).strip()
     output["vessel_name"] = _field("vessel_name", vessel, page, vessel_lines)
 
     arrival_lines = _span(page, r"^GIAM D", r"DIA D")
@@ -176,11 +177,18 @@ def _clean_discharge_port(value: str) -> str:
     return re.sub(r"\s+,", ",", value).strip(" ,-.")
 
 
+def _clean_vessel(value: str) -> str:
+    value = _clean_value(value).strip(' "')
+    value = re.sub(r"^M\.?\s*T\.?\s*:?\s*", "", value, flags=re.I).strip(' "')
+    return f"MT. {value}" if value else ""
+
+
 def _extract_survey(page: OCRPage) -> tuple[SurveyLine, dict[str, tuple[str, list[OCRLine]]]]:
     commodity, commodity_lines = _section_value(page, r"COMMODITY AS PER B/L", r"BILL OF LADING NO")
     bill, bill_lines = _section_value(page, r"BILL OF LADING NO", r"INSURANCE POLICY NO")
     policy, policy_lines = _section_value(page, r"INSURANCE POLICY NO", r"SHORE TANK NO")
     tank, tank_lines = _section_value(page, r"SHORE TANK NO", r"RECEIVED FROM")
+    vessel, vessel_lines = _section_value(page, r"RECEIVED FROM", r"LOADING PORT")
     origin, origin_lines = _section_value(page, r"LOADING PORT", r"DISCHARGING PORT")
     discharge, discharge_lines = _section_value(page, r"DISCHARGING PORT", r"DATE OF RECEIVING")
     if ":" in commodity and "HANG HOA" in _plain(commodity):
@@ -188,13 +196,13 @@ def _extract_survey(page: OCRPage) -> tuple[SurveyLine, dict[str, tuple[str, lis
 
     result_index = _find(page, r"RESULT OF INSPECTION")
     numeric_lines: list[tuple[float, OCRLine]] = []
-    if result_index is not None:
-        for line in page.lines[result_index + 1 :]:
-            match = re.fullmatch(r"\s*(-?\d{1,6}[.,]\d{3})\s*", line.text)
-            if match:
-                number = parse_number(match.group(1))
-                if number is not None:
-                    numeric_lines.append((number, line))
+    numeric_start = result_index + 1 if result_index is not None else 0
+    for line in page.lines[numeric_start:]:
+        match = re.fullmatch(r"\s*(-?\d{1,6}[.,]\d{3})\s*", line.text)
+        if match:
+            number = parse_number(match.group(1))
+            if number is not None:
+                numeric_lines.append((number, line))
     unique: list[tuple[float, OCRLine]] = []
     for item in numeric_lines:
         if not unique or abs(unique[-1][0] - item[0]) > 0.0001:
@@ -218,6 +226,7 @@ def _extract_survey(page: OCRPage) -> tuple[SurveyLine, dict[str, tuple[str, lis
         source_page=page.page_number,
     )
     shared = {
+        "vessel_name": (_clean_vessel(vessel), vessel_lines),
         "origin": (origin, origin_lines),
         "discharge_port": (_clean_discharge_port(discharge), discharge_lines),
     }
@@ -227,14 +236,14 @@ def _extract_survey(page: OCRPage) -> tuple[SurveyLine, dict[str, tuple[str, lis
 def extract_with_local_ocr(
     pages: list[PageAsset],
     progress_callback: Callable[[int, int, PageAsset], None] | None = None,
+    phase_callback: Callable[[str], None] | None = None,
 ) -> ExtractionResult:
     engine = get_local_ocr()
-    recognized: list[OCRPage] = []
-    total = len(pages)
-    for index, page in enumerate(pages, start=1):
-        recognized.append(engine.read_page(page))
-        if progress_callback:
-            progress_callback(index, total, page)
+    recognized = engine.read_pages_fixed_regions(
+        pages,
+        progress_callback,
+        phase_callback,
+    )
     fee_page = next((page for page in recognized if _page_kind(page) == "fee"), None)
     invoice_page = next((page for page in recognized if _page_kind(page) == "invoice"), None)
     survey_pages = [page for page in recognized if _page_kind(page) == "survey"]
@@ -262,6 +271,16 @@ def extract_with_local_ocr(
                 "; ".join(bill_numbers),
                 note="Lấy theo từng dòng B/L trên các chứng thư để đồng nhất với bảng khối lượng.",
             )
+        policy_numbers = list(
+            dict.fromkeys(line.policy_number for line in survey_lines if line.policy_number)
+        )
+        current_policies = fields.get("policy_numbers")
+        if policy_numbers and (current_policies is None or not current_policies.value):
+            fields["policy_numbers"] = _field(
+                "policy_numbers",
+                "; ".join(policy_numbers),
+                note="Đối chiếu từ từng chứng thư khi Thông báo phí không đọc đủ.",
+            )
         shore_tanks = list(dict.fromkeys(line.shore_tank for line in survey_lines if line.shore_tank))
         if shore_tanks:
             fields["shore_tanks"] = _field(
@@ -270,7 +289,9 @@ def extract_with_local_ocr(
                 note="Tổng hợp danh sách bồn từ các chứng thư.",
             )
     for name, (value, evidence_lines, source_page) in shared_values.items():
-        fields[name] = _field(name, value, source_page, evidence_lines)
+        current = fields.get(name)
+        if current is None or not current.value:
+            fields[name] = _field(name, value, source_page, evidence_lines)
 
     constants = {
         "issuing_unit": "PTI Hồ Chí Minh",
