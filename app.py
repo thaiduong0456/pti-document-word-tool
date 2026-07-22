@@ -190,6 +190,7 @@ if result:
                 min_value=0,
                 max_value=100,
                 format="%.0f%%",
+                color="auto",
             ),
             "Xác nhận": st.column_config.CheckboxColumn(),
         },
