@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import hmac
 import os
 import shutil
 import tempfile
@@ -31,20 +30,6 @@ def secret_value(name: str) -> str:
         return str(st.secrets.get(name, ""))
     except Exception:
         return ""
-
-
-def require_app_password() -> None:
-    expected = secret_value("APP_PASSWORD")
-    if not expected or st.session_state.get("authenticated", False):
-        return
-    st.title("Tạo tờ trình thanh toán phí giám định")
-    supplied = st.text_input("Mật khẩu truy cập", type="password")
-    if supplied and hmac.compare_digest(supplied, expected):
-        st.session_state.authenticated = True
-        st.rerun()
-    if supplied:
-        st.error("Mật khẩu không đúng.")
-    st.stop()
 
 
 def template_source() -> Path | bytes:
@@ -123,7 +108,6 @@ def update_result_from_editor(frame: pd.DataFrame) -> None:
 
 
 init_state()
-require_app_password()
 st.title("Tạo tờ trình thanh toán phí giám định")
 st.caption("AI chỉ đề xuất dữ liệu. Tool chỉ thay các vùng được tô vàng trong file Word mẫu.")
 

@@ -32,11 +32,10 @@ Hoặc khi triển khai Streamlit Cloud, tạo `.streamlit/secrets.toml`:
 
 ```toml
 OPENAI_API_KEY = "..."
-APP_PASSWORD = "..."
 TEMPLATE_DOCX_BASE64 = "..."
 ```
 
-`OPENAI_API_KEY` là tùy chọn vì người dùng có thể nhập key riêng trong giao diện. `APP_PASSWORD` cũng là tùy chọn nhưng nên bật khi mẫu Word chứa dữ liệu nội bộ. Khi chạy cục bộ, đặt mẫu tại `templates/template.docx`. Khi deploy repo công khai, mã hóa mẫu bằng `base64` và chỉ lưu giá trị trong Streamlit Secrets.
+`OPENAI_API_KEY` là tùy chọn vì người dùng có thể nhập key riêng trong giao diện. Khi chạy cục bộ, đặt mẫu tại `templates/template.docx`. Khi deploy repo công khai, mã hóa mẫu bằng `base64` và chỉ lưu giá trị trong Streamlit Secrets.
 
 Không commit `.env`, `secrets.toml`, file Word mẫu hoặc chứng từ thật lên GitHub.
 
@@ -75,5 +74,5 @@ AI/OCR không thể bảo đảm đúng tuyệt đối với ảnh mờ. Bước
 
 1. Đưa source lên repository; không commit file Word mẫu hoặc chứng từ thật.
 2. Tạo app mới, chọn `app.py` làm entrypoint.
-3. Thêm `TEMPLATE_DOCX_BASE64` và `APP_PASSWORD` vào Secrets của app.
+3. Thêm `TEMPLATE_DOCX_BASE64` vào Secrets của app.
 4. Có thể thêm `OPENAI_API_KEY`, hoặc để người dùng nhập key riêng theo từng phiên.
