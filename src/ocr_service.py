@@ -1,31 +1,66 @@
 from __future__ import annotations
 
-import base64
 import os
-from pathlib import Path
-
-import pytesseract
+from dataclasses import dataclass
+from functools import lru_cache
 
 from .file_handler import PageAsset
 
 
+@dataclass(frozen=True)
+class OCRLine:
+    text: str
+    confidence: float = 1.0
+
+
+@dataclass(frozen=True)
+class OCRPage:
+    source_file: str
+    page_number: int
+    lines: tuple[OCRLine, ...]
+
+    @property
+    def text(self) -> str:
+        return "\n".join(line.text for line in self.lines)
+
+
 class LocalOCR:
-    def __init__(self, language: str = "vie+eng"):
-        self.language = language
-        command = os.getenv("TESSERACT_CMD")
-        if command:
-            pytesseract.pytesseract.tesseract_cmd = command
+    """PaddleOCR pipeline kept in memory and shared between Streamlit sessions."""
+
+    def __init__(self, language: str = "vi"):
+        os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+        from paddleocr import PaddleOCR
+
+        self.engine = PaddleOCR(
+            lang=language,
+            ocr_version="PP-OCRv5",
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+        )
+
+    def read_page(self, page: PageAsset) -> OCRPage:
+        if page.text_layer:
+            lines = tuple(OCRLine(text.strip(), 1.0) for text in page.text_layer.splitlines() if text.strip())
+            return OCRPage(page.source_file, page.page_number, lines)
+
+        predictions = list(self.engine.predict(str(page.image_path)))
+        if not predictions:
+            return OCRPage(page.source_file, page.page_number, ())
+        payload = predictions[0].json["res"]
+        texts = payload.get("rec_texts", [])
+        scores = payload.get("rec_scores", [])
+        lines = tuple(
+            OCRLine(str(text).strip(), float(score))
+            for text, score in zip(texts, scores)
+            if str(text).strip()
+        )
+        return OCRPage(page.source_file, page.page_number, lines)
 
     def read(self, page: PageAsset) -> str:
-        if page.text_layer:
-            return page.text_layer
-        try:
-            return pytesseract.image_to_string(str(page.image_path), lang=self.language, config="--psm 6")
-        except pytesseract.TesseractError:
-            return pytesseract.image_to_string(str(page.image_path), lang="eng", config="--psm 6")
+        return self.read_page(page).text
 
 
-def image_data_url(path: Path) -> str:
-    suffix = path.suffix.lower().replace("jpg", "jpeg").lstrip(".")
-    return f"data:image/{suffix};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
-
+@lru_cache(maxsize=1)
+def get_local_ocr() -> LocalOCR:
+    return LocalOCR()

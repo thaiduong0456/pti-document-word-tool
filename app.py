@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import os
 import shutil
 import tempfile
 import uuid
@@ -14,9 +13,10 @@ import pandas as pd
 import streamlit as st
 
 from src.config import ROOT, load_fields, load_settings
-from src.data_extractor import apply_upload_date, export_json, extract_with_openai
+from src.data_extractor import apply_upload_date, export_json
 from src.exporters import result_to_excel
 from src.file_handler import materialize_pages
+from src.local_extractor import extract_with_local_ocr
 from src.schemas import ExtractionResult, ExtractedField
 from src.word_filler import editable_field_names, fill_template, layout_risks, remaining_placeholders, remove_all_highlights
 
@@ -57,17 +57,6 @@ def init_state() -> None:
 
 def session_dir() -> Path:
     return Path(tempfile.gettempdir()) / "pti_doc_tool" / st.session_state.session_id
-
-
-def configured_api_key() -> str:
-    if os.getenv("OPENAI_API_KEY"):
-        return os.environ["OPENAI_API_KEY"]
-    try:
-        if "OPENAI_API_KEY" in st.secrets:
-            return str(st.secrets["OPENAI_API_KEY"])
-    except Exception:
-        pass
-    return str(st.session_state.get("api_key", ""))
 
 
 def upload_signature(uploads) -> str:
@@ -120,16 +109,7 @@ def update_result_from_editor(frame: pd.DataFrame) -> None:
 init_state()
 st.title("Tạo tờ trình thanh toán phí giám định")
 st.caption("Tạo tờ trình thanh toán phí giám định tự động - MHL")
-model = os.getenv("OPENAI_MODEL", settings["openai_model"])
-
-if not configured_api_key():
-    st.warning("Cần OpenAI API key để xử lý chứng từ.")
-    with st.popover("Nhập OpenAI API key"):
-        st.session_state.api_key = st.text_input(
-            "OpenAI API key",
-            type="password",
-            help="Chỉ giữ trong phiên hiện tại; không ghi vào file hoặc log.",
-        )
+st.info("OCR chạy trực tiếp trên máy chủ. Không cần OpenAI API key và chứng từ không được gửi tới dịch vụ AI bên ngoài.")
 
 upload_mode = st.radio("Cách tải chứng từ", ["Chọn một hoặc nhiều file", "Chọn cả thư mục"], horizontal=True)
 directory_mode = upload_mode == "Chọn cả thư mục"
@@ -147,18 +127,15 @@ if uploads:
         st.error(f"Mỗi lần chỉ xử lý tối đa {settings['max_files']} file.")
 
 too_many = bool(uploads and len(uploads) > settings["max_files"])
-missing_key = not configured_api_key()
 current_upload_signature = upload_signature(uploads) if uploads else None
 should_process = bool(
     uploads
     and not too_many
-    and not missing_key
     and current_upload_signature != st.session_state.processed_upload_signature
 )
 if should_process:
     try:
         with st.status("Đang xử lý chứng từ...", expanded=True) as status:
-            os.environ["OPENAI_API_KEY"] = configured_api_key()
             work_dir = session_dir()
             shutil.rmtree(work_dir, ignore_errors=True)
             pages = []
@@ -166,7 +143,8 @@ if should_process:
                 st.write(f"Chuẩn bị {uploaded.name} ({index + 1}/{len(uploads)})")
                 pages.extend(materialize_pages(uploaded.name, uploaded.getvalue(), work_dir))
             st.session_state.pages = pages
-            st.session_state.result = extract_with_openai(pages, model=model)
+            st.write("Đang nhận dạng chữ bằng PaddleOCR tiếng Việt/Anh...")
+            st.session_state.result = extract_with_local_ocr(pages)
             upload_date = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%d/%m/%Y")
             st.session_state.result = apply_upload_date(st.session_state.result, upload_date)
             st.session_state.confirmed = {}
@@ -201,7 +179,7 @@ if result:
     reference_rows = field_rows(result, only_word_fields=False)
     reference_rows = [row for row in reference_rows if row["field_name"] not in editable_field_names()]
     if reference_rows:
-        with st.expander("Thông tin AI đọc được nhưng không được ghi vào Word"):
+        with st.expander("Thông tin OCR đọc được nhưng không được ghi vào Word"):
             st.dataframe(pd.DataFrame(reference_rows).drop(columns=["Xác nhận"]), use_container_width=True, hide_index=True)
 
     if result.survey_lines:
