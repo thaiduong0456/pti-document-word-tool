@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from statistics import mean
+from typing import Callable
 
 from .file_handler import PageAsset
 from .ocr_service import OCRLine, OCRPage, get_local_ocr
@@ -223,9 +224,17 @@ def _extract_survey(page: OCRPage) -> tuple[SurveyLine, dict[str, tuple[str, lis
     return line, shared
 
 
-def extract_with_local_ocr(pages: list[PageAsset]) -> ExtractionResult:
+def extract_with_local_ocr(
+    pages: list[PageAsset],
+    progress_callback: Callable[[int, int, PageAsset], None] | None = None,
+) -> ExtractionResult:
     engine = get_local_ocr()
-    recognized = [engine.read_page(page) for page in pages]
+    recognized: list[OCRPage] = []
+    total = len(pages)
+    for index, page in enumerate(pages, start=1):
+        recognized.append(engine.read_page(page))
+        if progress_callback:
+            progress_callback(index, total, page)
     fee_page = next((page for page in recognized if _page_kind(page) == "fee"), None)
     invoice_page = next((page for page in recognized if _page_kind(page) == "invoice"), None)
     survey_pages = [page for page in recognized if _page_kind(page) == "survey"]

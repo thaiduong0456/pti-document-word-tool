@@ -120,7 +120,9 @@ def _display(values: dict[str, str]) -> dict[str, str]:
     date = out.get("document_date", "")
     parts = date.split("/")
     out["document_date_long"] = f"{parts[0]} tháng {parts[1]} năm {parts[2]}" if len(parts) == 3 else date
-    out["policy_numbers"] = "; ".join(filter(None, re.split(r"\s*[;\n]+\s*", out.get("policy_numbers", ""))))
+    # NBSP keeps Word's justified paragraph from stretching the short separator
+    # spaces into large visual gaps between long policy numbers.
+    out["policy_numbers"] = ";\u00a0".join(filter(None, re.split(r"\s*[;\n]+\s*", out.get("policy_numbers", ""))))
     out["commodities"] = "; ".join(filter(None, re.split(r"\s*[;\n]+\s*", out.get("commodities", ""))))
     out["bill_of_lading_numbers"] = "; ".join(filter(None, re.split(r"\s*[;\n]+\s*", out.get("bill_of_lading_numbers", ""))))
     out["shore_tanks"] = ", ".join(filter(None, re.split(r"\s*[;\n]+\s*", out.get("shore_tanks", ""))))
@@ -129,6 +131,21 @@ def _display(values: dict[str, str]) -> dict[str, str]:
     out["shortage_mt_spaced"] = out.get("shortage_mt", "").replace("-", "- ")
     out["shortage_percent_spaced"] = out.get("shortage_percent", "").replace("-", "- ")
     return out
+
+
+def _remove_trailing_blank_page(document) -> None:
+    """Remove template-only empty paragraphs/section break after the final table."""
+    from docx.oxml.ns import qn
+
+    body = document._element.body
+    for element in reversed(list(body)[:-1]):  # keep the body-level sectPr
+        if element.tag != qn("w:p"):
+            break
+        visible_text = "".join(element.itertext()).replace("\t", "").strip()
+        has_visible_object = bool(element.xpath(".//w:drawing | .//w:pict | .//w:object"))
+        if visible_text or has_visible_object:
+            break
+        body.remove(element)
 
 
 def fill_template(template_path: str | Path | bytes, values: dict[str, str]) -> bytes:
@@ -140,6 +157,7 @@ def fill_template(template_path: str | Path | bytes, values: dict[str, str]) -> 
                 _replace_across_runs(paragraph, old, display[field_name], yellow_only=True)
         for name, value in display.items():
             _replace_across_runs(paragraph, "{{" + name + "}}", value, yellow_only=True)
+    _remove_trailing_blank_page(document)
     buffer = BytesIO()
     document.save(buffer)
     return buffer.getvalue()
@@ -163,6 +181,7 @@ def remove_all_highlights(data: bytes) -> bytes:
                 continue
             for highlight in list(rpr.findall(qn("w:highlight"))):
                 rpr.remove(highlight)
+    _remove_trailing_blank_page(document)
     buffer = BytesIO()
     document.save(buffer)
     return buffer.getvalue()
