@@ -150,7 +150,14 @@ if should_process:
                     text=f"Đang đọc chứng từ {done}/{total}: {page.source_file} — trang {page.page_number}",
                 )
 
-            st.session_state.result = extract_with_local_ocr(pages, progress_callback=update_ocr_progress)
+            def update_ocr_phase(message: str) -> None:
+                progress.progress(0, text=message)
+
+            st.session_state.result = extract_with_local_ocr(
+                pages,
+                progress_callback=update_ocr_progress,
+                phase_callback=update_ocr_phase,
+            )
             progress.empty()
             upload_date = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%d/%m/%Y")
             st.session_state.result = apply_upload_date(st.session_state.result, upload_date)
