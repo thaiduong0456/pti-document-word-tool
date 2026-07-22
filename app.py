@@ -108,8 +108,7 @@ def update_result_from_editor(frame: pd.DataFrame) -> None:
 
 init_state()
 st.title("Tạo tờ trình thanh toán phí giám định")
-st.caption("Tạo tờ trình thanh toán phí giám định tự động - MHL")
-st.info("OCR chạy trực tiếp trên máy chủ. Không cần OpenAI API key và chứng từ không được gửi tới dịch vụ AI bên ngoài.")
+st.caption("Tải lên các chứng từ liên quan như Hoá đơn, Thông báo phí, Chứng thư giám định để xuất ra Tờ trình")
 
 upload_mode = st.radio("Cách tải chứng từ", ["Chọn một hoặc nhiều file", "Chọn cả thư mục"], horizontal=True)
 directory_mode = upload_mode == "Chọn cả thư mục"
