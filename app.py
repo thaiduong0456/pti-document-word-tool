@@ -142,8 +142,16 @@ if should_process:
                 st.write(f"Chuẩn bị {uploaded.name} ({index + 1}/{len(uploads)})")
                 pages.extend(materialize_pages(uploaded.name, uploaded.getvalue(), work_dir))
             st.session_state.pages = pages
-            st.write("Đang nhận dạng chữ bằng PaddleOCR tiếng Việt/Anh...")
-            st.session_state.result = extract_with_local_ocr(pages)
+            progress = st.progress(0, text=f"Đang đọc chứng từ 0/{len(pages)}...")
+
+            def update_ocr_progress(done: int, total: int, page) -> None:
+                progress.progress(
+                    done / total,
+                    text=f"Đang đọc chứng từ {done}/{total}: {page.source_file} — trang {page.page_number}",
+                )
+
+            st.session_state.result = extract_with_local_ocr(pages, progress_callback=update_ocr_progress)
+            progress.empty()
             upload_date = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%d/%m/%Y")
             st.session_state.result = apply_upload_date(st.session_state.result, upload_date)
             st.session_state.confirmed = {}
