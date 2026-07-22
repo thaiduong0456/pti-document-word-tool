@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import shutil
 import tempfile
@@ -51,6 +52,7 @@ def init_state() -> None:
     st.session_state.setdefault("confirmed", {})
     st.session_state.setdefault("generated_docx", None)
     st.session_state.setdefault("session_id", uuid.uuid4().hex)
+    st.session_state.setdefault("processed_upload_signature", None)
 
 
 def session_dir() -> Path:
@@ -66,6 +68,14 @@ def configured_api_key() -> str:
     except Exception:
         pass
     return str(st.session_state.get("api_key", ""))
+
+
+def upload_signature(uploads) -> str:
+    digest = hashlib.sha256()
+    for uploaded in uploads:
+        digest.update(uploaded.name.encode("utf-8"))
+        digest.update(uploaded.getvalue())
+    return digest.hexdigest()
 
 
 def field_rows(result: ExtractionResult, only_word_fields: bool = True) -> list[dict]:
@@ -109,19 +119,17 @@ def update_result_from_editor(frame: pd.DataFrame) -> None:
 
 init_state()
 st.title("Tạo tờ trình thanh toán phí giám định")
-st.caption("AI chỉ đề xuất dữ liệu. Tool chỉ thay các vùng được tô vàng trong file Word mẫu.")
+st.caption("Tạo tờ trình thanh toán phí giám định tự động - MHL")
+model = os.getenv("OPENAI_MODEL", settings["openai_model"])
 
-with st.sidebar:
-    st.header("Cấu hình")
-    model = st.text_input("OpenAI model", os.getenv("OPENAI_MODEL", settings["openai_model"]))
-    if not configured_api_key():
-        st.session_state.api_key = st.text_input("OpenAI API key", type="password", help="Chỉ giữ trong phiên hiện tại; không ghi vào file hoặc log.")
-    st.info("Ảnh chỉ được gửi ra ngoài khi bạn bấm xử lý. API key lấy từ ô trên, OPENAI_API_KEY hoặc Streamlit Secrets.")
-    if st.button("Xóa dữ liệu phiên hiện tại"):
-        shutil.rmtree(session_dir(), ignore_errors=True)
-        for key in ["result", "pages", "confirmed", "generated_docx"]:
-            st.session_state[key] = None if key in {"result", "generated_docx"} else ([] if key == "pages" else {})
-        st.rerun()
+if not configured_api_key():
+    st.warning("Cần OpenAI API key để xử lý chứng từ.")
+    with st.popover("Nhập OpenAI API key"):
+        st.session_state.api_key = st.text_input(
+            "OpenAI API key",
+            type="password",
+            help="Chỉ giữ trong phiên hiện tại; không ghi vào file hoặc log.",
+        )
 
 upload_mode = st.radio("Cách tải chứng từ", ["Chọn một hoặc nhiều file", "Chọn cả thư mục"], horizontal=True)
 directory_mode = upload_mode == "Chọn cả thư mục"
@@ -140,9 +148,14 @@ if uploads:
 
 too_many = bool(uploads and len(uploads) > settings["max_files"])
 missing_key = not configured_api_key()
-if missing_key:
-    st.warning("Hãy cấu hình OpenAI API key để dùng AI Vision.")
-if st.button("Đọc và trích xuất thông tin", type="primary", disabled=not uploads or too_many or missing_key):
+current_upload_signature = upload_signature(uploads) if uploads else None
+should_process = bool(
+    uploads
+    and not too_many
+    and not missing_key
+    and current_upload_signature != st.session_state.processed_upload_signature
+)
+if should_process:
     try:
         with st.status("Đang xử lý chứng từ...", expanded=True) as status:
             os.environ["OPENAI_API_KEY"] = configured_api_key()
@@ -158,6 +171,7 @@ if st.button("Đọc và trích xuất thông tin", type="primary", disabled=not
             st.session_state.result = apply_upload_date(st.session_state.result, upload_date)
             st.session_state.confirmed = {}
             st.session_state.generated_docx = None
+            st.session_state.processed_upload_signature = current_upload_signature
             status.update(label="Đã trích xuất xong", state="complete")
     except Exception as error:
         st.error(f"Không thể xử lý: {error}")

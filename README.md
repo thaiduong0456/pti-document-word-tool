@@ -48,7 +48,7 @@ streamlit run app.py
 1. Tải toàn bộ ảnh/PDF của một bộ chứng từ.
    - Chọn **một hoặc nhiều file**; hoặc
    - Chọn **cả thư mục** để tải tất cả PDF/ảnh trong thư mục và thư mục con.
-2. Nhập OpenAI API key nếu máy chủ chưa cấu hình sẵn, rồi bấm **Đọc và trích xuất thông tin**.
+2. Nhập OpenAI API key nếu máy chủ chưa cấu hình sẵn. Ứng dụng tự động xử lý ngay sau khi tải chứng từ.
 3. Kiểm tra bằng chứng, sửa giá trị nếu cần và đánh dấu **Xác nhận**.
 4. Chỉ khi các trường bắt buộc dùng trong vùng vàng đã được xác nhận, nút tạo Word mới được mở.
 5. Tải Word, JSON hoặc bảng kiểm tra Excel. Bản Word tải xuống được tự động bỏ toàn bộ bôi vàng.
