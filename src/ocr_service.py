@@ -29,6 +29,7 @@ class LocalOCR:
 
     def __init__(self, language: str = "vi"):
         os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+        os.environ.setdefault("FLAGS_use_mkldnn", "0")
         from paddleocr import PaddleOCR
 
         self.engine = PaddleOCR(
@@ -37,6 +38,7 @@ class LocalOCR:
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
+            enable_mkldnn=False,
         )
 
     def read_page(self, page: PageAsset) -> OCRPage:
