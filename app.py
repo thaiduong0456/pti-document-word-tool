@@ -35,14 +35,16 @@ def secret_value(name: str) -> str:
 
 def require_app_password() -> None:
     expected = secret_value("APP_PASSWORD")
-    if not expected:
+    if not expected or st.session_state.get("authenticated", False):
         return
     st.title("Tạo tờ trình thanh toán phí giám định")
     supplied = st.text_input("Mật khẩu truy cập", type="password")
-    if not supplied or not hmac.compare_digest(supplied, expected):
-        if supplied:
-            st.error("Mật khẩu không đúng.")
-        st.stop()
+    if supplied and hmac.compare_digest(supplied, expected):
+        st.session_state.authenticated = True
+        st.rerun()
+    if supplied:
+        st.error("Mật khẩu không đúng.")
+    st.stop()
 
 
 def template_source() -> Path | bytes:
