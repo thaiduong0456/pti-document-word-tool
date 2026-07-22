@@ -79,7 +79,12 @@ def _page_kind(page: OCRPage) -> str:
         return "fee"
     if "VAT INVOICE" in text or "HOA DON GIA TRI" in text:
         return "invoice"
-    if "SURVEY REPORT ON SHORE QUANTITY" in text:
+    if (
+        "SURVEY REPORT" in text
+        or "SHORE QUANTITY" in text
+        or "CHUNG THU GIAM DINH" in text
+        or "BAO CAO GIAM DINH" in text
+    ):
         return "survey"
     return "other"
 
@@ -174,7 +179,7 @@ def _clean_discharge_port(value: str) -> str:
     value = re.sub(r"Jetty\s*B1", "Jetty B1", value, flags=re.I)
     value = re.sub(r"Go\s*Dau\s*Term\.?", "Go Dau Terminal", value, flags=re.I)
     value = re.sub(r"[- ]*Dong\s*Nai\s*Prov\.?,?", ", Đồng Nai", value, flags=re.I)
-    return re.sub(r"\s+,", ",", value).strip(" ,-.")
+    return re.sub(r"\s+,", ",", value).strip(" :,-.")
 
 
 def _clean_vessel(value: str) -> str:
@@ -194,11 +199,57 @@ def _extract_survey(page: OCRPage) -> tuple[SurveyLine, dict[str, tuple[str, lis
     if ":" in commodity and "HANG HOA" in _plain(commodity):
         commodity = commodity.split(":", 1)[1].strip()
 
+    # Photos taken at an angle can interleave the bilingual label column with
+    # the value column. Prefer strongly typed values found anywhere on the page.
+    typed_policy_lines = [line for line in page.lines if POLICY_RE.search(line.text.replace(" ", ""))]
+    if typed_policy_lines:
+        policy = POLICY_RE.search(typed_policy_lines[0].text.replace(" ", "")).group(0)
+        policy_lines = typed_policy_lines[:1]
+    typed_bill_lines = [
+        line
+        for line in page.lines
+        if re.search(r"\b(?:EX\s*\d+/\d{4}|[A-Z]{2,5}\d{5,})\b", line.text, re.I)
+        and "/GCN/" not in line.text.upper()
+    ]
+    if typed_bill_lines:
+        match = re.search(r"\b(?:EX\s*\d+/\d{4}|[A-Z]{2,5}\d{5,})\b", typed_bill_lines[0].text, re.I)
+        bill = match.group(0).strip() if match else bill
+        bill_lines = typed_bill_lines[:1]
+    typed_tank_lines = [line for line in page.lines if re.search(r"\bT-\d{2,4}\b", line.text, re.I)]
+    if typed_tank_lines:
+        tanks = re.findall(r"\bT-\d{2,4}\b", typed_tank_lines[0].text, re.I)
+        tank = " & ".join(dict.fromkeys(item.upper() for item in tanks))
+        tank_lines = typed_tank_lines[:1]
+    typed_vessel_lines = [
+        line for line in page.lines if re.search(r"\bM\.?\s*T\.?\s*[:\"]", line.text, re.I)
+    ]
+    if typed_vessel_lines:
+        vessel = typed_vessel_lines[0].text
+        vessel_lines = typed_vessel_lines[:1]
+    typed_port_lines = [
+        line for line in page.lines if "JETTY" in _plain(line.text) or "GO DAU" in _plain(line.text)
+    ]
+    if typed_port_lines:
+        discharge = typed_port_lines[0].text
+        discharge_lines = typed_port_lines[:1]
+    commodity_candidates = [
+        line
+        for line in page.lines
+        if any(token in _plain(line.text) for token in ("XYLENE", "AROMATIC", "TOPSOL", "WHITE SPIRIT"))
+        and "COMMODITY" not in _plain(line.text)
+    ]
+    if commodity_candidates:
+        commodity = _clean_value(commodity_candidates[0].text)
+        commodity_lines = commodity_candidates[:1]
+
     result_index = _find(page, r"RESULT OF INSPECTION")
     numeric_lines: list[tuple[float, OCRLine]] = []
     numeric_start = result_index + 1 if result_index is not None else 0
     for line in page.lines[numeric_start:]:
-        match = re.fullmatch(r"\s*(-?\d{1,6}[.,]\d{3})\s*", line.text)
+        match = re.fullmatch(
+            r"\s*(-?(?:\d{1,3}(?:,\d{3})+|\d{1,6})[.]\d{3}|-?\d{1,6}[,.]\d{3})\s*",
+            line.text,
+        )
         if match:
             number = parse_number(match.group(1))
             if number is not None:

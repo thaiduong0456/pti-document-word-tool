@@ -83,9 +83,36 @@ class LocalOCR:
             return "fee"
         if "HOA DON GIA TRI" in text or "VAT INVOICE" in text:
             return "invoice"
-        if "SURVEY REPORT" in text or "SHORE QUANTITY" in text:
+        if (
+            "SURVEY REPORT" in text
+            or "SHORE QUANTITY" in text
+            or "CHUNG THU GIAM DINH" in text
+            or "BAO CAO GIAM DINH" in text
+        ):
             return "survey"
         return "other"
+
+    @classmethod
+    def _content_page_kind(cls, lines: list[OCRLine]) -> str:
+        """Classify from recognized business labels, not page geometry alone."""
+        text = cls._plain(" ".join(line.text for line in lines))
+        survey_markers = (
+            "SHORE TANK",
+            "RECEIVED FROM",
+            "LOADING PORT",
+            "DISCHARGING PORT",
+            "BILL OF LADING",
+            "INSURANCE POLICY",
+            "RESULT OF INSPECTION",
+        )
+        if sum(marker in text for marker in survey_markers) >= 3:
+            return "survey"
+        if "INVOICE NO" in text or "NGAY (DATE)" in text:
+            return "invoice"
+        fee_markers = ("TEN HANG", "KHOI LU", "PHI GIAM D", "TONG CONG")
+        if sum(marker in text for marker in fee_markers) >= 2:
+            return "fee"
+        return cls._fixed_page_kind(lines)
 
     @staticmethod
     def _poly_metrics(poly, width: int, height: int) -> tuple[float, float, float, float]:
@@ -238,6 +265,42 @@ class LocalOCR:
                 field_chunks.append(len(field_crops))
             field_lines = self._recognize_crops(field_crops)
 
+            # A photographed document can shift enough for its title geometry to
+            # resemble another template. Validate against actual labels and only
+            # fall back to all detected lines for mismatched/unknown pages.
+            fallback_positions = []
+            for position, kind in enumerate(page_kinds):
+                lines = field_lines[
+                    field_chunks[position] : field_chunks[position + 1]
+                ]
+                content_kind = self._content_page_kind(lines)
+                if content_kind != "other" and content_kind != kind:
+                    page_kinds[position] = content_kind
+                    fallback_positions.append(position)
+                elif kind == "other":
+                    fallback_positions.append(position)
+
+            if fallback_positions:
+                fallback_crops = []
+                fallback_chunks = [0]
+                for position in fallback_positions:
+                    fallback_crops.extend(
+                        pipeline._crop_by_polys(images[position], all_polys[position])
+                    )
+                    fallback_chunks.append(len(fallback_crops))
+                fallback_lines = self._recognize_crops(fallback_crops)
+                replacements = {}
+                for chunk_index, position in enumerate(fallback_positions):
+                    lines = fallback_lines[
+                        fallback_chunks[chunk_index] : fallback_chunks[chunk_index + 1]
+                    ]
+                    replacements[position] = lines
+                    content_kind = self._content_page_kind(lines)
+                    if content_kind != "other":
+                        page_kinds[position] = content_kind
+            else:
+                replacements = {}
+
             kind_headers = {
                 "fee": OCRLine("THÔNG BÁO PHÍ", 1.0),
                 "invoice": OCRLine("HÓA ĐƠN GIÁ TRỊ GIA TĂNG (VAT INVOICE)", 1.0),
@@ -246,13 +309,11 @@ class LocalOCR:
             for position, ((original_index, page), kind) in enumerate(
                 zip(image_entries, page_kinds)
             ):
-                lines = [
-                    line
-                    for line in field_lines[
-                        field_chunks[position] : field_chunks[position + 1]
-                    ]
-                    if line.text
-                ]
+                source_lines = replacements.get(
+                    position,
+                    field_lines[field_chunks[position] : field_chunks[position + 1]],
+                )
+                lines = [line for line in source_lines if line.text]
                 if kind in kind_headers:
                     lines = [kind_headers[kind], *lines]
                 recognized[original_index] = OCRPage(
